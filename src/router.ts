@@ -1,7 +1,9 @@
 // Routeur à coût : choisit les magasins, respecte un budget, mesure le contrefactuel.
 import { allStores, type Store } from "./stores";
 import { detectIntent, weigh, type Intent } from "./intent";
-import { logQuery, toTokens, type Answer, type Probe, type StoreName } from "./core";
+import { logQuery, toTokens, DATA_DIR, type Answer, type Probe, type StoreName } from "./core";
+import { writeFileSync } from "fs";
+import { join } from "path";
 
 export interface AskOptions {
   scope?: string;
@@ -88,6 +90,16 @@ export async function ask(question: string, opt: AskOptions = {}): Promise<AskRe
   else verdict = "Pas de contrefactuel mesurable pour ce type de question.";
 
   const ms = Date.now() - t0;
+
+  // Publie le verdict : le garde PreToolUse s'en sert pour rouvrir Grep
+  // dès que trame reconnaît lui-même ne pas être le bon outil.
+  try {
+    writeFileSync(join(DATA_DIR, "last-verdict.json"), JSON.stringify({
+      ts: Date.now(), question, intent, hit: answers.length > 0,
+      saved: saved ?? null, loses: answers.length === 0 || (saved != null && saved <= 0),
+    }));
+  } catch { /* le verdict est un confort, jamais un blocage */ }
+
   logQuery({ question, scope: opt.scope, store: answers[0]?.store,
              tokens, baseline, ms, hit: answers.length > 0 });
 
